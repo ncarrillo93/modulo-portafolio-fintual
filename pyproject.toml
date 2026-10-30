@@ -1,0 +1,13 @@
+[project]
+name = "portfolio-management"
+version = "0.1.0"
+description = "Módulo de gestión de cartera de inversión y motor de rebalanceo"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["."]
+python_files = ["test_*.py"]
