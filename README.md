@@ -23,7 +23,7 @@ Para resolver las ambigüedades propias del dominio financiero de forma explíci
    * *Activos huérfanos* (presentes en `holdings` pero ausentes o con peso `0` en `target_allocations`): se interpretan como salida del mandato y generan una orden `SELL` por el 100% de la posición.
    * *Activos nuevos* (presentes en `target_allocations` pero no en `holdings`): se asume tenencia inicial `0` y generan una orden `BUY`.
 6. **Umbral épsilon (`1e-4`) sobre diferencia de acciones:**
-   * *Decisión:* Si $|\text{acciones\_ideales} - \text{acciones\_actuales}| < \epsilon$, se emite `HOLD` con `shares = 0` y `amount = 0.00` para evitar micro-órdenes innecesarias.
+   * *Decisión:* Si $|\text{acciones ideales} - \text{acciones actuales}| < \epsilon$, se emite `HOLD` con `shares = 0` y `amount = 0.00` para evitar micro-órdenes innecesarias.
    * *Trade-off:* En activos de precio unitario muy alto, una fracción pequeña de acción puede equivaler a un monto monetario relevante; por eso `epsilon` es configurable en `rebalance()`.
 7. **Sin fricciones de mercado:**
    * Se asume ejecución simultánea sin comisiones de corretaje, impuestos ni *slippage* entre el cálculo de la orden y su calce.
@@ -60,13 +60,13 @@ Para resolver las ambigüedades propias del dominio financiero de forma explíci
 1. **Valor Total de Mercado:**
    $$\text{Valor Total} = \sum (\text{acciones}_i \times \text{precio}_i)$$
 2. **Posición Ideal por Activo:**
-   $$\text{Valor Ideal}_i = \text{Valor Total} \times \text{peso\_objetivo}_i$$
+   $$\text{Valor Ideal}_i = \text{Valor Total} \times \text{peso objetivo}_i$$
    $$\text{Acciones Ideales}_i = \frac{\text{Valor Ideal}_i}{\text{precio}_i}$$
 3. **Desviación y Clasificación:**
    $$\Delta \text{Acciones}_i = \text{Acciones Ideales}_i - \text{Acciones Actuales}_i$$
-   * $|\Delta \text{Acciones}_i| < \epsilon$ $\rightarrow$ `HOLD`
-   * $\Delta \text{Acciones}_i > 0$ $\rightarrow$ `BUY`
-   * $\Delta \text{Acciones}_i < 0$ $\rightarrow$ `SELL`
+   * $|\Delta \text{Acciones}_i| < \epsilon \implies$ `HOLD`
+   * $\Delta \text{Acciones}_i > 0 \implies$ `BUY`
+   * $\Delta \text{Acciones}_i < 0 \implies$ `SELL`
 
 ---
 
