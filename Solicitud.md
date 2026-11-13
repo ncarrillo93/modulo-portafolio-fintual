@@ -1,13 +1,14 @@
-# Módulo de Gestión de Cartera y Motor de Rebalanceo
+# Contrato Técnico: Módulo de Gestión de Cartera y Motor de Rebalanceo
 
-Solución modular y tipada en Python 3.11 con Pydantic, Dataclasses y principios SOLID. Todo el código reside directamente en la raíz del proyecto.
+Solución modular y tipada en Python 3.11 con Pydantic, Dataclasses, aritmética `Decimal` y principios SOLID.
 
 ## Archivos del Proyecto
-* [`models.py`](file:///c:/Users/Nicolas%20Carrillo/OneDrive%20-%20CTR/Escritorio/Postulacion%20Fintual/models.py): Modelos de datos (`Asset`, `Portfolio`, `RebalanceInstruction`, `ActionType`) y excepciones.
-* [`rebalance.py`](file:///c:/Users/Nicolas%20Carrillo/OneDrive%20-%20CTR/Escritorio/Postulacion%20Fintual/rebalance.py): Motor algorítmico de rebalanceo (`RebalanceService`).
-* [`main.py`](file:///c:/Users/Nicolas%20Carrillo/OneDrive%20-%20CTR/Escritorio/Postulacion%20Fintual/main.py): Demostración interactiva (estado antes y después). Valida e instala dependencias automáticamente si faltan.
-* [`test_portfolio.py`](file:///c:/Users/Nicolas%20Carrillo/OneDrive%20-%20CTR/Escritorio/Postulacion%20Fintual/test_portfolio.py): Suite de 18 pruebas unitarias automatizadas con `pytest`.
-* [`requirements.txt`](file:///c:/Users/Nicolas%20Carrillo/OneDrive%20-%20CTR/Escritorio/Postulacion%20Fintual/requirements.txt): Dependencias necesarias (`pydantic`, `pytest`).
+* [`models.py`](models.py): Modelos de datos (`Asset`, `Portfolio`, `RebalanceInstruction`, `ActionType`) y excepciones.
+* [`rebalance.py`](rebalance.py): Motor algorítmico de rebalanceo (`RebalanceService`).
+* [`main.py`](main.py): Demostración interactiva (estado antes y después).
+* [`test_portfolio.py`](test_portfolio.py): Suite de pruebas unitarias automatizadas con `pytest`.
+* [`requirements.txt`](requirements.txt): Dependencias necesarias (`pydantic`, `pytest`).
+* [`README.md`](README.md): Supuestos, trade-offs de diseño y guía de uso.
 
 ---
 
@@ -26,11 +27,11 @@ Contenedor estructurado de activo financiero (`pydantic.dataclasses.dataclass`).
 
 | Variable | Tipo | Requerido | Descripción | Regla de Validación |
 | :--- | :--- | :--- | :--- | :--- |
-| `symbol` | `str` | Sí | Ticker del activo | Se normaliza a mayúsculas y sin espacios. |
-| `current_price` | `float` | Sí | Precio de mercado actual | Estrictamente `> 0.0`. Redondeado a 2 decimales. |
+| `symbol` | `str` | Sí | Ticker del activo | Se normaliza a mayúsculas, sin espacios y no vacío. |
+| `current_price` | `Decimal` | Sí | Precio de mercado actual | Acepta `Decimal \| float \| int \| str`. Redondeado a 2 decimales (`ROUND_HALF_UP`), estrictamente `> 0.00`. |
 
 #### Métodos:
-* **`get_current_price() -> float`** / **`getCurrentPrice() -> float`**: Retorna `current_price`.
+* **`get_current_price() -> Decimal`** / **`getCurrentPrice() -> Decimal`**: Retorna `current_price`.
 * **`currentPrice`** *(property)*: Alias `camelCase` para compatibilidad.
 
 ---
@@ -42,10 +43,10 @@ Instrucción inmutable generada por el motor (`frozen dataclass`).
 | :--- | :--- | :--- |
 | `symbol` | `str` | Ticker del activo a transaccionar. |
 | `action` | `ActionType` | Orden recomendada (`BUY`, `SELL`, `HOLD`). |
-| `shares` | `float` | Cantidad de acciones a transaccionar (`0.0` si es `HOLD`). |
-| `amount` | `float` | Monto monetario estimado (`shares * precio`). |
-| `current_shares` | `float` | Acciones iniciales antes del rebalanceo. |
-| `target_shares` | `float` | Acciones objetivo deseadas tras el rebalanceo. |
+| `shares` | `Decimal` | Cantidad de acciones a transaccionar (6 decimales, `0` si es `HOLD`). |
+| `amount` | `Decimal` | Monto monetario estimado (2 decimales). |
+| `current_shares` | `Decimal` | Acciones iniciales antes del rebalanceo (6 decimales). |
+| `target_shares` | `Decimal` | Acciones objetivo deseadas tras el rebalanceo (6 decimales). |
 
 ---
 
@@ -54,23 +55,23 @@ Administrador de tenencias y objetivos de ponderación.
 
 | Variable | Tipo | Por Defecto | Descripción | Regla de Validación |
 | :--- | :--- | :--- | :--- | :--- |
-| `holdings` | `dict[str, float]` | `{}` | Mapeo `símbolo -> acciones` | Cantidades deben ser `>= 0.0`. |
-| `target_allocations` | `dict[str, float]` | `{}` | Mapeo `símbolo -> peso objetivo` | Pesos `>= 0.0`. Su suma debe ser `1.0` (tolerancia `1e-6`). |
+| `holdings` | `dict[str, Decimal]` | `{}` | Mapeo `símbolo -> acciones` | Cantidades `>= 0`. |
+| `target_allocations` | `dict[str, Decimal]` | `{}` | Mapeo `símbolo -> peso objetivo` | Pesos `>= 0`. Su suma debe ser `1` (tolerancia `1e-6`). |
 
 #### Métodos:
-* **`validate_target_allocations(tolerance: float = 1e-6) -> None`**:
-  * *Entrada:* `tolerance: float` (default `1e-6`).
+* **`validate_target_allocations(tolerance: Decimal | float = Decimal("1e-6")) -> None`**:
+  * *Entrada:* `tolerance: Decimal | float` (default `1e-6`).
   * *Salida:* `None`.
-  * *Excepción:* Lanza `InvalidAllocationError` (`ValueError`) si la suma difiere de 1.0 más allá de la tolerancia o si hay pesos negativos.
+  * *Excepción:* Lanza `InvalidAllocationError` (`ValueError`) si la suma difiere de 1 más allá de la tolerancia o si hay pesos negativos.
 * **`validate_holdings() -> None`**:
   * *Salida:* `None`.
   * *Excepción:* Lanza `ValueError` si hay tenencias negativas.
-* **`rebalance(assets: Mapping[str, Asset], epsilon: float = 1e-4) -> list[RebalanceInstruction]`**:
+* **`rebalance(assets: Mapping[str, Asset], epsilon: Decimal | float = Decimal("1e-4")) -> list[RebalanceInstruction]`**:
   * *Entradas:*
     * `assets: Mapping[str, Asset]` (catálogo de precios).
-    * `epsilon: float` (default `1e-4`, umbral para `HOLD`).
+    * `epsilon: Decimal | float` (default `1e-4`, umbral para `HOLD`).
   * *Salida:* `list[RebalanceInstruction]`. Ordenado con `SELL` primero (para liberar liquidez), luego `BUY`, luego `HOLD`.
-  * *Excepciones:* Lanza `AssetNotFoundError` si un activo no tiene precio; `InvalidPriceError` si un precio es `<= 0.0`.
+  * *Excepciones:* Lanza `AssetNotFoundError` si un activo no tiene precio; `InvalidPriceError` si un precio es `<= 0.00`; `ValueError` si `epsilon < 0`.
 
 ---
 
@@ -83,6 +84,6 @@ pip install -r requirements.txt
 # 2. Ejecutar script de demostración (Antes vs Después)
 python main.py
 
-# 3. Ejecutar pruebas unitarias (18 tests)
+# 3. Ejecutar pruebas unitarias
 pytest -v
 ```

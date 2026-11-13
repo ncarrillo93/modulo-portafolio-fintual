@@ -1,47 +1,15 @@
 """
-Script de demostración y prueba interactiva del motor de rebalanceo de inversiones.
+Script de demostración del motor de rebalanceo de inversiones.
 
 Muestra el estado detallado de la cartera ANTES y DESPUÉS de aplicar las
 instrucciones generadas por el motor algorítmico de rebalanceo.
-Incluye autoverificación e instalación automática de dependencias si faltan.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import subprocess
-import sys
+from decimal import Decimal
 
-
-def ensure_dependencies() -> None:
-    """Verifica que las librerías necesarias estén instaladas; si no, las instala automáticamente."""
-    required_packages = ["pydantic", "pytest"]
-    missing = [pkg for pkg in required_packages if importlib.util.find_spec(pkg) is None]
-
-    if missing:
-        print(f"Librerías faltantes detectadas: {', '.join(missing)}")
-        print("Instalando dependencias automáticamente vía pip...")
-        try:
-            # Asegurar pip si no estuviese presente
-            if importlib.util.find_spec("pip") is None:
-                subprocess.run(
-                    [sys.executable, "-m", "ensurepip", "--upgrade"],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-
-            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
-            print("Dependencias instaladas con éxito.\n")
-        except Exception as exc:
-            print(f"Aviso: no fue posible auto-instalar: {exc}")
-            print("Ejecute manualmente: pip install -r requirements.txt\n")
-
-
-# Validar dependencias antes de importar módulos del proyecto
-ensure_dependencies()
-
-from models import ActionType, Asset, Portfolio, RebalanceInstruction
+from models import ActionType, Asset, Portfolio
 
 
 def print_separator(char: str = "=", length: int = 80) -> None:
@@ -50,18 +18,21 @@ def print_separator(char: str = "=", length: int = 80) -> None:
 
 def print_portfolio_state(
     title: str,
-    holdings: dict[str, float],
-    target_allocations: dict[str, float],
+    holdings: dict[str, Decimal],
+    target_allocations: dict[str, Decimal],
     assets: dict[str, Asset],
-) -> float:
+) -> Decimal:
     print_separator("-")
     print(f" {title.upper()}")
     print_separator("-")
 
     total_value = sum(
-        holdings.get(sym, 0.0) * assets[sym].get_current_price()
-        for sym in holdings
-        if sym in assets
+        (
+            holdings.get(sym, Decimal("0")) * assets[sym].get_current_price()
+            for sym in holdings
+            if sym in assets
+        ),
+        Decimal("0"),
     )
 
     header = f"{'Símbolo':<10} | {'Acciones':<12} | {'Precio':<10} | {'Valor ($)':<12} | {'% Actual':<10} | {'% Objetivo':<10}"
@@ -70,11 +41,11 @@ def print_portfolio_state(
 
     all_symbols = sorted(set(holdings.keys()).union(target_allocations.keys()))
     for sym in all_symbols:
-        shares = holdings.get(sym, 0.0)
-        price = assets[sym].get_current_price() if sym in assets else 0.0
+        shares = holdings.get(sym, Decimal("0"))
+        price = assets[sym].get_current_price() if sym in assets else Decimal("0")
         val = shares * price
-        pct_actual = (val / total_value * 100) if total_value > 0 else 0.0
-        pct_target = target_allocations.get(sym, 0.0) * 100
+        pct_actual = (val / total_value * Decimal("100")) if total_value > Decimal("0") else Decimal("0")
+        pct_target = target_allocations.get(sym, Decimal("0")) * Decimal("100")
 
         print(
             f"{sym:<10} | {shares:>12.4f} | ${price:>9.2f} | ${val:>11.2f} | {pct_actual:>9.2f}% | {pct_target:>9.2f}%"
@@ -94,16 +65,24 @@ def main() -> None:
 
     # 1. Catálogo de activos de mercado
     market_assets: dict[str, Asset] = {
-        "META": Asset(symbol="META", current_price=500.00),
-        "FRUNA": Asset(symbol="FRUNA", current_price=10.00),
-        "AAPL": Asset(symbol="AAPL", current_price=200.00),
-        "TSLA": Asset(symbol="TSLA", current_price=250.00),
+        "META": Asset(symbol="META", current_price=Decimal("500.00")),
+        "FRUNA": Asset(symbol="FRUNA", current_price=Decimal("10.00")),
+        "AAPL": Asset(symbol="AAPL", current_price=Decimal("200.00")),
+        "TSLA": Asset(symbol="TSLA", current_price=Decimal("250.00")),
     }
 
     # 2. Cartera con tenencias desbalanceadas
     portfolio = Portfolio(
-        holdings={"META": 10.0, "FRUNA": 50.0, "AAPL": 5.0},
-        target_allocations={"META": 0.40, "FRUNA": 0.30, "AAPL": 0.30},
+        holdings={
+            "META": Decimal("10.0"),
+            "FRUNA": Decimal("50.0"),
+            "AAPL": Decimal("5.0"),
+        },
+        target_allocations={
+            "META": Decimal("0.40"),
+            "FRUNA": Decimal("0.30"),
+            "AAPL": Decimal("0.30"),
+        },
     )
 
     # 3. Estado ANTES del rebalanceo
@@ -117,29 +96,29 @@ def main() -> None:
 
     # 4. Ejecutar rebalanceo
     print(">>> FASE 2: EJECUCIÓN DEL MOTOR DE REBALANCEO (rebalance)")
-    instructions = portfolio.rebalance(assets=market_assets, epsilon=1e-4)
+    instructions = portfolio.rebalance(assets=market_assets, epsilon=Decimal("1e-4"))
 
     print(
         f"{'Acción':<8} | {'Símbolo':<8} | {'Acciones a Operar':<18} | {'Monto Est. ($)':<16} | {'Acciones Ini -> Fin'}"
     )
     print("-" * 75)
 
-    total_ventas = 0.0
-    total_compras = 0.0
+    total_ventas = Decimal("0.00")
+    total_compras = Decimal("0.00")
 
     for instr in instructions:
         if instr.action == ActionType.SELL:
             total_ventas += instr.amount
-            color_prefix = "[-]"
+            prefix = "[-]"
         elif instr.action == ActionType.BUY:
             total_compras += instr.amount
-            color_prefix = "[+]"
+            prefix = "[+]"
         else:
-            color_prefix = "[=]"
+            prefix = "[=]"
 
         flow_str = f"{instr.current_shares:.4f} -> {instr.target_shares:.4f}"
         print(
-            f"{color_prefix} {instr.action.value:<4} | {instr.symbol:<8} | {instr.shares:>18.4f} | ${instr.amount:>15.2f} | {flow_str}"
+            f"{prefix} {instr.action.value:<4} | {instr.symbol:<8} | {instr.shares:>18.4f} | ${instr.amount:>15.2f} | {flow_str}"
         )
 
     print("-" * 75)
